@@ -11,6 +11,7 @@ import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.annotation.RequiresApi
@@ -23,6 +24,12 @@ import androidx.compose.ui.Modifier
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
+import java.io.FileWriter
+import java.text.SimpleDateFormat
+import java.util.*
 
 class MainActivity : ComponentActivity() {
     private lateinit var networkChangeReceiver: BroadcastReceiver
@@ -51,6 +58,7 @@ class MainActivity : ComponentActivity() {
             val activeNetworkInfo = connectivityManager.activeNetworkInfo
             isConnected.value = activeNetworkInfo?.isConnected == true
             showNotification(isConnected.value)
+            logConnectionStatus(isConnected.value)
         }
     }
 
@@ -60,7 +68,7 @@ class MainActivity : ComponentActivity() {
         createNotificationChannel(channelId)
 
         val notification = NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(androidx.core.R.drawable.notification_bg) // آیکون نوتیفیکیشن را تنظیم کنید
+            .setSmallIcon(androidx.core.R.drawable.notification_bg)
             .setContentTitle("Network Status")
             .setContentText(notificationText)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -96,6 +104,25 @@ class MainActivity : ComponentActivity() {
             notificationManager.createNotificationChannel(channel)
         }
     }
+    private fun logConnectionStatus(isConnected: Boolean) {
+        val connectionStatus = if (isConnected) "Connected" else "Disconnected"
+        val statusLog = JSONObject().apply {
+            put("Time", SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date()))
+            put("Connection type", "Internet")
+            put("Status", connectionStatus)
+        }
+
+        val publicDocsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        val logsFile = File(publicDocsDir, "connection_logs.json")
+        if (!logsFile.exists()) {
+            logsFile.createNewFile()
+        }
+        val logs = if (logsFile.length() == 0L) JSONArray() else JSONArray(logsFile.readText())
+        logs.put(statusLog)
+        FileWriter(logsFile, false).use { it.write(logs.toString()) }
+    }
+
+
 }
 
 @Composable
@@ -104,3 +131,4 @@ fun NetworkStatusDisplay(isConnected: Boolean) {
         Text(text = if (isConnected) "Connected to Internet" else "Disconnected")
     }
 }
+
