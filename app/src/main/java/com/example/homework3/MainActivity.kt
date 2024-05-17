@@ -15,12 +15,14 @@ import android.os.Environment
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.annotation.RequiresApi
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -39,6 +41,7 @@ import java.util.concurrent.TimeUnit
 class MainActivity : ComponentActivity() {
     private lateinit var networkChangeReceiver: BroadcastReceiver
     private val isConnected = mutableStateOf(true)
+    private val connectionLogs = mutableStateListOf<JSONObject>()
 
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -47,8 +50,9 @@ class MainActivity : ComponentActivity() {
         IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION).also {
             registerReceiver(networkChangeReceiver, it, Context.RECEIVER_NOT_EXPORTED)
         }
+        loadLogs()
         setContent {
-            NetworkStatusDisplay(isConnected.value)
+            NetworkStatusScreen(isConnected.value, connectionLogs)
         }
         setupPeriodicWorker()
     }
@@ -127,6 +131,20 @@ class MainActivity : ComponentActivity() {
         val logs = if (logsFile.length() == 0L) JSONArray() else JSONArray(logsFile.readText())
         logs.put(statusLog)
         FileWriter(logsFile, false).use { it.write(logs.toString()) }
+
+        // Update in-memory log list
+        connectionLogs.add(0, statusLog)
+    }
+
+    private fun loadLogs() {
+        val publicDocsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        val logsFile = File(publicDocsDir, "connection_logs.json")
+        if (logsFile.exists() && logsFile.length() != 0L) {
+            val logs = JSONArray(logsFile.readText())
+            for (i in 0 until logs.length()) {
+                connectionLogs.add(logs.getJSONObject(i))
+            }
+        }
     }
 
     private fun setupPeriodicWorker() {
@@ -144,8 +162,38 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun NetworkStatusDisplay(isConnected: Boolean) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(text = if (isConnected) "Connected to Internet" else "Disconnected")
+fun NetworkStatusScreen(isConnected: Boolean, connectionLogs: List<JSONObject>) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(text = if (isConnected) "Connected to Internet" else "Disconnected")
+        }
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(2f)
+                .padding(16.dp)
+        ) {
+            items(connectionLogs) { log ->
+                LogItem(log)
+            }
+        }
+    }
+}
+
+@Composable
+fun LogItem(log: JSONObject) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+    ) {
+        Text(text = "Time: ${log.getString("Time")}")
+        Text(text = "Connection type: ${log.getString("Connection type")}")
+        Text(text = "Status: ${log.getString("Status")}")
     }
 }
