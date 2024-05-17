@@ -5,6 +5,7 @@ import android.content.Context
 import android.os.Environment
 import android.provider.Settings
 import android.util.Log
+import androidx.core.app.ActivityCompat
 import androidx.work.Worker
 import androidx.work.WorkerParameters
 import org.json.JSONArray
@@ -34,8 +35,8 @@ class ConnectivityWorker(context: Context, workerParams: WorkerParameters) :
     }
 
     private fun checkBluetoothStatus() {
-        val bluetoothAdapter: BluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
-        val status = if (bluetoothAdapter.isEnabled) "Bluetooth ON" else "Bluetooth OFF"
+        val bluetoothAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
+        val status = if (bluetoothAdapter?.isEnabled == true) "Bluetooth ON" else "Bluetooth OFF"
         Log.i("worker_airplane", status)
         logStatus("Bluetooth", status)
     }
@@ -47,8 +48,7 @@ class ConnectivityWorker(context: Context, workerParams: WorkerParameters) :
             put("Status", status)
         }
 
-        val publicDocsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-        val logsFile = File(publicDocsDir, "connection_logs.json")
+        val logsFile = File(applicationContext.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), "connection_logs.json")
         if (!logsFile.exists()) {
             logsFile.createNewFile()
         }

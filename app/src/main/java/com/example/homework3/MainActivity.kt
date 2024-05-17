@@ -9,6 +9,9 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
@@ -46,20 +49,83 @@ class MainActivity : ComponentActivity() {
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        networkChangeReceiver = NetworkChangeReceiver()
-        IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION).also {
-            registerReceiver(networkChangeReceiver, it, Context.RECEIVER_NOT_EXPORTED)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            registerNetworkCallback()
+        } else {
+            networkChangeReceiver = NetworkChangeReceiver()
+            IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION).also {
+                registerReceiver(networkChangeReceiver, it)
+            }
         }
+
         loadLogs()
         setContent {
             NetworkStatusScreen(isConnected.value, connectionLogs)
         }
         setupPeriodicWorker()
+        requestPermissions()
+        checkInitialNetworkState()
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        unregisterReceiver(networkChangeReceiver)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            unregisterReceiver(networkChangeReceiver)
+        }
+    }
+
+    private fun requestPermissions() {
+        ActivityCompat.requestPermissions(
+            this,
+            arrayOf(
+                Manifest.permission.POST_NOTIFICATIONS,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                Manifest.permission.READ_EXTERNAL_STORAGE
+            ),
+            PERMISSION_REQUEST_CODE
+        )
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == PERMISSION_REQUEST_CODE) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                // Permission granted, continue with the task that requires this permission
+            } else {
+                // Permission denied, show a message to the user
+            }
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
+    private fun registerNetworkCallback() {
+        val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val networkRequest = NetworkRequest.Builder()
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .build()
+        connectivityManager.registerNetworkCallback(networkRequest, object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                isConnected.value = true
+                showNotification(isConnected.value)
+                logConnectionStatus(isConnected.value)
+            }
+
+            override fun onLost(network: Network) {
+                isConnected.value = false
+                showNotification(isConnected.value)
+                logConnectionStatus(isConnected.value)
+            }
+        })
+    }
+
+    private fun checkInitialNetworkState() {
+        val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val activeNetwork = connectivityManager.activeNetwork
+        val networkCapabilities = connectivityManager.getNetworkCapabilities(activeNetwork)
+        isConnected.value = networkCapabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+        showNotification(isConnected.value)
+        logConnectionStatus(isConnected.value)
     }
 
     inner class NetworkChangeReceiver : BroadcastReceiver() {
@@ -89,13 +155,6 @@ class MainActivity : ComponentActivity() {
                 Manifest.permission.POST_NOTIFICATIONS
             ) != PackageManager.PERMISSION_GRANTED
         ) {
-            // TODO: Consider calling
-            //    ActivityCompat#requestPermissions
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for ActivityCompat#requestPermissions for more details.
             return
         }
         NotificationManagerCompat.from(this).notify(1, notification)
@@ -123,22 +182,20 @@ class MainActivity : ComponentActivity() {
             put("Status", connectionStatus)
         }
 
-        val publicDocsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-        val logsFile = File(publicDocsDir, "connection_logs.json")
-        if (!logsFile.exists()) {
-            logsFile.createNewFile()
+        val logsFile = File(applicationContext.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), "connection_logs.json")
+        val logs = if (logsFile.exists() && logsFile.length() != 0L) {
+            JSONArray(logsFile.readText())
+        } else {
+            JSONArray()
         }
-        val logs = if (logsFile.length() == 0L) JSONArray() else JSONArray(logsFile.readText())
         logs.put(statusLog)
         FileWriter(logsFile, false).use { it.write(logs.toString()) }
 
-        // Update in-memory log list
         connectionLogs.add(0, statusLog)
     }
 
     private fun loadLogs() {
-        val publicDocsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-        val logsFile = File(publicDocsDir, "connection_logs.json")
+        val logsFile = File(applicationContext.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), "connection_logs.json")
         if (logsFile.exists() && logsFile.length() != 0L) {
             val logs = JSONArray(logsFile.readText())
             for (i in 0 until logs.length()) {
@@ -158,6 +215,10 @@ class MainActivity : ComponentActivity() {
             .build()
 
         WorkManager.getInstance(this).enqueue(workRequest)
+    }
+
+    companion object {
+        private const val PERMISSION_REQUEST_CODE = 1001
     }
 }
 
