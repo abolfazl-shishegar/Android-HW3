@@ -24,12 +24,17 @@ import androidx.compose.ui.Modifier
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.work.Constraints
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.FileWriter
 import java.text.SimpleDateFormat
 import java.util.*
+import java.util.concurrent.TimeUnit
 
 class MainActivity : ComponentActivity() {
     private lateinit var networkChangeReceiver: BroadcastReceiver
@@ -45,6 +50,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             NetworkStatusDisplay(isConnected.value)
         }
+        setupPeriodicWorker()
     }
 
     override fun onDestroy() {
@@ -104,6 +110,7 @@ class MainActivity : ComponentActivity() {
             notificationManager.createNotificationChannel(channel)
         }
     }
+
     private fun logConnectionStatus(isConnected: Boolean) {
         val connectionStatus = if (isConnected) "Connected" else "Disconnected"
         val statusLog = JSONObject().apply {
@@ -122,7 +129,18 @@ class MainActivity : ComponentActivity() {
         FileWriter(logsFile, false).use { it.write(logs.toString()) }
     }
 
+    private fun setupPeriodicWorker() {
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.NOT_REQUIRED)
+            .build()
 
+        val workRequest = PeriodicWorkRequestBuilder<ConnectivityWorker>(2, TimeUnit.MINUTES)
+            .setConstraints(constraints)
+            .setInitialDelay(2, TimeUnit.MINUTES) // Optional initial delay
+            .build()
+
+        WorkManager.getInstance(this).enqueue(workRequest)
+    }
 }
 
 @Composable
@@ -131,4 +149,3 @@ fun NetworkStatusDisplay(isConnected: Boolean) {
         Text(text = if (isConnected) "Connected to Internet" else "Disconnected")
     }
 }
-
