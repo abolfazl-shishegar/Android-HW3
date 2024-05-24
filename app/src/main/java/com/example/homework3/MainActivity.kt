@@ -107,13 +107,13 @@ class MainActivity : ComponentActivity() {
         connectivityManager.registerNetworkCallback(networkRequest, object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
                 isConnected.value = true
-                showNotification(isConnected.value)
+//                showNotification(isConnected.value)
                 logConnectionStatus(isConnected.value)
             }
 
             override fun onLost(network: Network) {
                 isConnected.value = false
-                showNotification(isConnected.value)
+//                showNotification(isConnected.value)
                 logConnectionStatus(isConnected.value)
             }
         })
@@ -124,7 +124,7 @@ class MainActivity : ComponentActivity() {
         val activeNetwork = connectivityManager.activeNetwork
         val networkCapabilities = connectivityManager.getNetworkCapabilities(activeNetwork)
         isConnected.value = networkCapabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
-        showNotification(isConnected.value)
+//        showNotification(isConnected.value)
         logConnectionStatus(isConnected.value)
     }
 
@@ -133,7 +133,7 @@ class MainActivity : ComponentActivity() {
             val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
             val activeNetworkInfo = connectivityManager.activeNetworkInfo
             isConnected.value = activeNetworkInfo?.isConnected == true
-            showNotification(isConnected.value)
+//            showNotification(isConnected.value)
             logConnectionStatus(isConnected.value)
         }
     }
@@ -225,14 +225,6 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun NetworkStatusScreen(isConnected: Boolean, connectionLogs: List<JSONObject>) {
     Column(modifier = Modifier.fillMaxSize()) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(text = if (isConnected) "Connected to Internet" else "Disconnected")
-        }
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
